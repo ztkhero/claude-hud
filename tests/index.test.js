@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { formatSessionDuration, main } from '../dist/index.js';
+import { formatSessionDuration, main, applyAutoCompactWindow } from '../dist/index.js';
 
 test('formatSessionDuration returns empty string without session start', () => {
   assert.equal(formatSessionDuration(undefined, () => 0), '');
@@ -83,6 +83,55 @@ test('index entrypoint runs when executed directly', async () => {
   }
 
   assert.ok(logs.some((line) => line.includes('[claude-hud] Initializing...')));
+});
+
+test('applyAutoCompactWindow caps the window and recomputes raw percentage', () => {
+  const stdin = {
+    context_window: {
+      context_window_size: 1000000,
+      current_usage: { input_tokens: 76000 },
+      used_percentage: 8,
+      remaining_percentage: 92,
+    },
+  };
+
+  applyAutoCompactWindow(stdin, 400000);
+
+  // 76k / 400k = 19% raw, matching /context.
+  assert.equal(stdin.context_window.context_window_size, 400000);
+  assert.equal(stdin.context_window.used_percentage, 19);
+  assert.equal(stdin.context_window.remaining_percentage, 81);
+});
+
+test('applyAutoCompactWindow leaves stdin untouched when window already matches', () => {
+  const stdin = {
+    context_window: {
+      context_window_size: 200000,
+      current_usage: { input_tokens: 10000 },
+      used_percentage: 5,
+    },
+  };
+
+  applyAutoCompactWindow(stdin, 400000);
+
+  // 200k model window is already smaller than the 400k auto-compact setting.
+  assert.equal(stdin.context_window.context_window_size, 200000);
+  assert.equal(stdin.context_window.used_percentage, 5);
+});
+
+test('applyAutoCompactWindow is a no-op when the setting is unset', () => {
+  const stdin = {
+    context_window: {
+      context_window_size: 1000000,
+      current_usage: { input_tokens: 34000 },
+      used_percentage: 3,
+    },
+  };
+
+  applyAutoCompactWindow(stdin, null);
+
+  assert.equal(stdin.context_window.context_window_size, 1000000);
+  assert.equal(stdin.context_window.used_percentage, 3);
 });
 
 test('main executes the happy path with default dependencies', async () => {

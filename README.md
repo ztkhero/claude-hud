@@ -91,6 +91,7 @@ Claude Code → stdin JSON → claude-hud → stdout → displayed in your termi
 **Key features:**
 - Native token data from Claude Code (not estimated)
 - Scales with Claude Code's reported context window size, including newer 1M-context sessions
+- Respects `CLAUDE_CODE_AUTO_COMPACT_WINDOW` (env var or `settings.json`), so the context bar shows raw usage against your capped window and matches `/context` (e.g. 76k / 400k = 19%)
 - Parses the transcript for tool/agent activity
 - Updates every ~300ms
 

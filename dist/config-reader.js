@@ -48,6 +48,65 @@ function countMcpServersInFile(filePath, excludeFrom) {
     }
     return servers.size;
 }
+const AUTO_COMPACT_WINDOW_ENV = 'CLAUDE_CODE_AUTO_COMPACT_WINDOW';
+function parsePositiveNumber(value) {
+    const num = typeof value === 'string' ? Number(value.trim()) : value;
+    if (typeof num === 'number' && Number.isFinite(num) && num > 0) {
+        return num;
+    }
+    return null;
+}
+function readAutoCompactWindow(filePath) {
+    if (!fs.existsSync(filePath))
+        return null;
+    try {
+        const content = fs.readFileSync(filePath, 'utf8');
+        const config = JSON.parse(content);
+        // Claude Code reads the auto-compact window from the
+        // CLAUDE_CODE_AUTO_COMPACT_WINDOW env var (settable via the settings `env`
+        // block); the top-level `autoCompactWindow` key is also honored.
+        return (parsePositiveNumber(config.env?.[AUTO_COMPACT_WINDOW_ENV]) ??
+            parsePositiveNumber(config.autoCompactWindow));
+    }
+    catch (error) {
+        debug(`Failed to read auto-compact window from ${filePath}:`, error);
+    }
+    return null;
+}
+/**
+ * Resolve the effective context window from Claude Code's auto-compact window
+ * setting. Claude Code reports the model's full context size to the statusline
+ * (e.g. 1M) even when a smaller auto-compact window is configured, so the HUD
+ * reads the setting directly to match what `/context` shows.
+ *
+ * Sources, highest precedence first:
+ *   1. CLAUDE_CODE_AUTO_COMPACT_WINDOW env var (inherited from Claude Code)
+ *   2. settings.json `env.CLAUDE_CODE_AUTO_COMPACT_WINDOW` / `autoCompactWindow`
+ *      across project local, project, then user scope
+ *
+ * Returns null when unset, so callers fall back to stdin's size.
+ */
+export function getAutoCompactWindow(cwd) {
+    const fromEnv = parsePositiveNumber(process.env[AUTO_COMPACT_WINDOW_ENV]);
+    if (fromEnv !== null) {
+        return fromEnv;
+    }
+    const homeDir = os.homedir();
+    const claudeDir = getClaudeConfigDir(homeDir);
+    const candidates = [];
+    if (cwd) {
+        candidates.push(path.join(cwd, '.claude', 'settings.local.json'));
+        candidates.push(path.join(cwd, '.claude', 'settings.json'));
+    }
+    candidates.push(path.join(claudeDir, 'settings.json'));
+    for (const candidate of candidates) {
+        const value = readAutoCompactWindow(candidate);
+        if (value !== null) {
+            return value;
+        }
+    }
+    return null;
+}
 function countHooksInFile(filePath) {
     if (!fs.existsSync(filePath))
         return 0;
