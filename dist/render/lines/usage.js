@@ -13,16 +13,15 @@ export function renderUsageLine(ctx) {
     if (getProviderLabel(ctx.stdin)) {
         return null;
     }
-    const label = dim('Usage');
     if (ctx.usageData.apiUnavailable) {
         const errorHint = formatUsageError(ctx.usageData.apiError);
-        return `${label} ${warning(`⚠${errorHint}`, colors)}`;
+        return `${warning(`⚠${errorHint}`, colors)}`;
     }
     if (isLimitReached(ctx.usageData)) {
         const resetTime = ctx.usageData.fiveHour === 100
             ? formatResetTime(ctx.usageData.fiveHourResetAt)
             : formatResetTime(ctx.usageData.sevenDayResetAt);
-        return `${label} ${critical(`⚠ Limit reached${resetTime ? ` (resets ${resetTime})` : ''}`, colors)}`;
+        return `${critical(`⚠ Limit reached${resetTime ? ` (resets ${resetTime})` : ''}`, colors)}`;
     }
     const threshold = display?.usageThreshold ?? 0;
     const fiveHour = ctx.usageData.fiveHour;
@@ -36,7 +35,7 @@ export function renderUsageLine(ctx) {
     const usageBarEnabled = display?.usageBarEnabled ?? true;
     const fiveHourPart = usageBarEnabled
         ? (fiveHourReset
-            ? `${quotaBar(fiveHour ?? 0, 10, colors)} ${fiveHourDisplay} (${fiveHourReset} / 5h)`
+            ? `${quotaBar(fiveHour ?? 0, 10, colors)} ${fiveHourDisplay} (${fiveHourReset})`
             : `${quotaBar(fiveHour ?? 0, 10, colors)} ${fiveHourDisplay}`)
         : (fiveHourReset
             ? `5h: ${fiveHourDisplay} (${fiveHourReset})`
@@ -50,14 +49,14 @@ export function renderUsageLine(ctx) {
         const sevenDayReset = formatResetTime(ctx.usageData.sevenDayResetAt);
         const sevenDayPart = usageBarEnabled
             ? (sevenDayReset
-                ? `${quotaBar(sevenDay, 10, colors)} ${sevenDayDisplay} (${sevenDayReset} / 7d)`
+                ? `${quotaBar(sevenDay, 10, colors)} ${sevenDayDisplay} (${sevenDayReset})`
                 : `${quotaBar(sevenDay, 10, colors)} ${sevenDayDisplay}`)
             : (sevenDayReset
                 ? `7d: ${sevenDayDisplay} (${sevenDayReset})`
                 : `7d: ${sevenDayDisplay}`);
-        return `${label} ${fiveHourPart} | ${sevenDayPart}${syncingSuffix}`;
+        return `${fiveHourPart} | ${sevenDayPart}${syncingSuffix}`;
     }
-    return `${label} ${fiveHourPart}${syncingSuffix}`;
+    return `${fiveHourPart}${syncingSuffix}`;
 }
 function formatUsagePercent(percent, colors) {
     if (percent === null) {

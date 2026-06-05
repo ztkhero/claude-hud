@@ -20,9 +20,11 @@ export function renderIdentityLine(ctx: RenderContext): string {
   const contextValue = formatContextValue(ctx, percent, contextValueMode);
   const contextValueDisplay = `${getContextColor(percent, colors)}${contextValue}${RESET}`;
 
+  const usedSize = `${formatK(getTotalTokens(ctx.stdin))} `;
+
   let line = display?.showContextBar !== false
-    ? `${dim('Context')} ${coloredBar(percent, 10, colors)} ${contextValueDisplay}`
-    : `${dim('Context')} ${contextValueDisplay}`;
+    ? `${usedSize}${coloredBar(percent, 10, colors)} ${contextValueDisplay}`
+    : `${usedSize}${contextValueDisplay}`;
 
   if (display?.showTokenBreakdown !== false && percent >= 85) {
     const usage = ctx.stdin.context_window?.current_usage;
@@ -34,6 +36,10 @@ export function renderIdentityLine(ctx: RenderContext): string {
   }
 
   return line;
+}
+
+function formatK(n: number): string {
+  return `${Math.round(n / 1000)}K`;
 }
 
 function formatTokens(n: number): string {
