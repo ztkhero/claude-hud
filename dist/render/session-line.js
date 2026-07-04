@@ -173,15 +173,11 @@ export function renderSessionLine(ctx) {
                     usageParts.push(sevenDayPart);
                 }
                 for (const limit of modelLimits) {
+                    // No reset countdown: model limits share the weekly window, so it would duplicate the 7d reset
                     const percentDisplay = formatUsagePercent(limit.utilization, colors);
-                    const reset = formatResetTime(limit.resetAt);
                     usageParts.push(usageBarEnabled
-                        ? (reset
-                            ? `${limit.model} ${quotaBar(limit.utilization ?? 0, 10, colors)} ${percentDisplay} (${reset} / 7d)`
-                            : `${limit.model} ${quotaBar(limit.utilization ?? 0, 10, colors)} ${percentDisplay}`)
-                        : (reset
-                            ? `${limit.model}: ${percentDisplay} (${reset})`
-                            : `${limit.model}: ${percentDisplay}`));
+                        ? `${limit.model} ${quotaBar(limit.utilization ?? 0, 10, colors)} ${percentDisplay}`
+                        : `${limit.model}: ${percentDisplay}`);
                 }
                 parts.push(`${usageParts.join(' | ')}${syncingSuffix}`);
             }

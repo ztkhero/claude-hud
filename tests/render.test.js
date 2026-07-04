@@ -718,7 +718,7 @@ test('renderUsageLine shows model-scoped weekly limits', () => {
 
   const line = stripAnsi(renderUsageLine(ctx));
   assert.ok(line.includes('Fable: 42%'), `should include model usage: ${line}`);
-  assert.ok(line.includes('(1d 4h)'), `should include model reset countdown: ${line}`);
+  assert.ok(!line.includes('(1d 4h)'), `should omit model reset countdown (duplicates weekly): ${line}`);
 });
 
 test('renderUsageLine hides model limits when showModelUsage is false', () => {

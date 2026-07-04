@@ -176,7 +176,7 @@ Context █████░░░░░ 45% │ Usage ██░░░░░░░
 When your plan has a model-specific weekly limit (e.g. Fable), it appears labeled with the model name:
 
 ```
-Usage ██░░░░░░░░ 25% (1h 30m / 5h) | Fable ██░░░░░░░░ 18% (2d 6h)
+Usage ██░░░░░░░░ 25% (1h 30m / 5h) | Fable ██░░░░░░░░ 18%
 ```
 
 To disable, set `display.showUsage` to `false` (all usage) or `display.showModelUsage` to `false` (model-scoped limits only).
