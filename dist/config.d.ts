@@ -32,6 +32,7 @@ export interface HudConfig {
         showSpeed: boolean;
         showTokenBreakdown: boolean;
         showUsage: boolean;
+        showModelUsage: boolean;
         usageBarEnabled: boolean;
         showTools: boolean;
         showAgents: boolean;

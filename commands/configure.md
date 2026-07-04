@@ -15,8 +15,9 @@ These are always enabled and NOT configurable:
 - Model name `[Opus]`
 - Context bar `████░░░░░░ 45%`
 
-Advanced settings such as `colors.*`, `pathLevels`, `display.usageThreshold`, and
-`display.environmentThreshold` are preserved when saving but are not edited by this guided flow.
+Advanced settings such as `colors.*`, `pathLevels`, `display.usageThreshold`,
+`display.showModelUsage`, and `display.environmentThreshold` are preserved when saving
+but are not edited by this guided flow.
 
 ---
 
@@ -270,6 +271,7 @@ Write to `~/.claude/plugins/claude-hud/config.json`.
 Merge with existing config, preserving:
 - `pathLevels` (not in configure flow)
 - `display.usageThreshold` (advanced config)
+- `display.showModelUsage` (advanced config)
 - `display.environmentThreshold` (advanced config)
 - `colors` (advanced manual palette overrides)
 

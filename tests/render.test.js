@@ -703,6 +703,72 @@ test('renderUsageLine shows 7d reset countdown in text-only mode', () => {
   assert.ok(line.includes('(1d 4h)'), `should include 7d reset countdown in text-only mode: ${line}`);
 });
 
+test('renderUsageLine shows model-scoped weekly limits', () => {
+  const ctx = baseContext();
+  const resetTime = new Date(Date.now() + (28 * 60 * 60 * 1000)); // 1d 4h from now
+  ctx.config.display.usageBarEnabled = false;
+  ctx.usageData = {
+    planName: 'Max',
+    fiveHour: 12,
+    sevenDay: 17,
+    fiveHourResetAt: null,
+    sevenDayResetAt: null,
+    modelLimits: [{ model: 'Fable', utilization: 42, resetAt: resetTime }],
+  };
+
+  const line = stripAnsi(renderUsageLine(ctx));
+  assert.ok(line.includes('Fable: 42%'), `should include model usage: ${line}`);
+  assert.ok(line.includes('(1d 4h)'), `should include model reset countdown: ${line}`);
+});
+
+test('renderUsageLine hides model limits when showModelUsage is false', () => {
+  const ctx = baseContext();
+  ctx.config.display.usageBarEnabled = false;
+  ctx.config.display.showModelUsage = false;
+  ctx.usageData = {
+    planName: 'Max',
+    fiveHour: 12,
+    sevenDay: 17,
+    fiveHourResetAt: null,
+    sevenDayResetAt: null,
+    modelLimits: [{ model: 'Fable', utilization: 42, resetAt: null }],
+  };
+
+  const line = stripAnsi(renderUsageLine(ctx));
+  assert.ok(!line.includes('Fable'), `should not include model usage: ${line}`);
+});
+
+test('renderUsageLine skips model limits with null utilization', () => {
+  const ctx = baseContext();
+  ctx.config.display.usageBarEnabled = false;
+  ctx.usageData = {
+    planName: 'Max',
+    fiveHour: 12,
+    sevenDay: 17,
+    fiveHourResetAt: null,
+    sevenDayResetAt: null,
+    modelLimits: [{ model: 'Fable', utilization: null, resetAt: null }],
+  };
+
+  const line = stripAnsi(renderUsageLine(ctx));
+  assert.ok(!line.includes('Fable'), `should skip model limit without utilization: ${line}`);
+});
+
+test('renderSessionLine shows model-scoped weekly limits', () => {
+  const ctx = baseContext();
+  ctx.usageData = {
+    planName: 'Max',
+    fiveHour: 12,
+    sevenDay: 17,
+    fiveHourResetAt: null,
+    sevenDayResetAt: null,
+    modelLimits: [{ model: 'Fable', utilization: 42, resetAt: null }],
+  };
+
+  const line = stripAnsi(renderSessionLine(ctx));
+  assert.ok(line.includes('Fable: 42%'), `should include model usage: ${line}`);
+});
+
 test('renderSessionLine displays limit reached warning', () => {
   const ctx = baseContext();
   const resetTime = new Date(Date.now() + 3600000); // 1 hour from now

@@ -145,6 +145,7 @@ Edit `~/.claude/plugins/claude-hud/config.json` directly for advanced settings s
 | `display.showDuration` | boolean | false | Show session duration `⏱️ 5m` |
 | `display.showSpeed` | boolean | false | Show output token speed `out: 42.1 tok/s` |
 | `display.showUsage` | boolean | true | Show usage limits (Pro/Max/Team only) |
+| `display.showModelUsage` | boolean | true | Show model-scoped weekly limits (e.g. Fable) when reported by the API |
 | `display.usageBarEnabled` | boolean | true | Display usage as visual bar instead of text |
 | `display.sevenDayThreshold` | 0-100 | 80 | Show 7-day usage when >= threshold (0 = always) |
 | `display.showTokenBreakdown` | boolean | true | Show token details at high context (85%+) |
@@ -172,7 +173,13 @@ The 7-day percentage appears when above the `display.sevenDayThreshold` (default
 Context █████░░░░░ 45% │ Usage ██░░░░░░░░ 25% (1h 30m / 5h) | ██████████ 85% (2d / 7d)
 ```
 
-To disable, set `display.showUsage` to `false`.
+When your plan has a model-specific weekly limit (e.g. Fable), it appears labeled with the model name:
+
+```
+Usage ██░░░░░░░░ 25% (1h 30m / 5h) | Fable ██░░░░░░░░ 18% (2d 6h)
+```
+
+To disable, set `display.showUsage` to `false` (all usage) or `display.showModelUsage` to `false` (model-scoped limits only).
 
 **Requirements:**
 - Claude Pro, Max, or Team subscription (not available for API users)

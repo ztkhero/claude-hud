@@ -6,7 +6,7 @@ import * as tls from 'tls';
 import * as https from 'https';
 import { execFileSync } from 'child_process';
 import { createHash } from 'crypto';
-import type { UsageData } from './types.js';
+import type { ModelUsageLimit, UsageData } from './types.js';
 import { createDebug } from './debug.js';
 import { getClaudeConfigDir, getHudPluginDir } from './claude-config-dir.js';
 
@@ -35,6 +35,16 @@ interface UsageApiResponse {
     utilization?: number;
     resets_at?: string;
   };
+  limits?: Array<{
+    kind?: string;
+    percent?: number;
+    resets_at?: string;
+    scope?: {
+      model?: {
+        display_name?: string | null;
+      } | null;
+    } | null;
+  } | null>;
 }
 
 interface UsageApiResult {
@@ -111,6 +121,13 @@ function hydrateCacheData(data: UsageData): UsageData {
   }
   if (data.sevenDayResetAt) {
     data.sevenDayResetAt = new Date(data.sevenDayResetAt);
+  }
+  if (data.modelLimits) {
+    for (const limit of data.modelLimits) {
+      if (limit.resetAt) {
+        limit.resetAt = new Date(limit.resetAt);
+      }
+    }
   }
   return data;
 }
@@ -457,6 +474,7 @@ export async function getUsage(overrides: Partial<UsageApiDeps> = {}): Promise<U
 
     const fiveHourResetAt = parseDate(apiResult.data.five_hour?.resets_at);
     const sevenDayResetAt = parseDate(apiResult.data.seven_day?.resets_at);
+    const modelLimits = parseModelLimits(apiResult.data.limits);
 
     const result: UsageData = {
       planName,
@@ -465,6 +483,9 @@ export async function getUsage(overrides: Partial<UsageApiDeps> = {}): Promise<U
       fiveHourResetAt,
       sevenDayResetAt,
     };
+    if (modelLimits.length > 0) {
+      result.modelLimits = modelLimits;
+    }
 
     // Write to file cache — also store as lastGoodData for rate-limit resilience
     writeCache(homeDir, result, now, { lastGoodData: result });
@@ -818,6 +839,24 @@ function getPlanName(subscriptionType: string): string | null {
   if (!subscriptionType || lower.includes('api')) return null;
   // Unknown subscription type - show it capitalized
   return subscriptionType.charAt(0).toUpperCase() + subscriptionType.slice(1);
+}
+
+/** Extract model-scoped weekly limits (e.g. Fable) from the API `limits` array */
+function parseModelLimits(limits: UsageApiResponse['limits']): ModelUsageLimit[] {
+  if (!Array.isArray(limits)) return [];
+
+  const result: ModelUsageLimit[] = [];
+  for (const limit of limits) {
+    if (limit?.kind !== 'weekly_scoped') continue;
+    const model = limit.scope?.model?.display_name;
+    if (!model || typeof model !== 'string') continue;
+    result.push({
+      model,
+      utilization: parseUtilization(limit.percent),
+      resetAt: parseDate(limit.resets_at),
+    });
+  }
+  return result;
 }
 
 /** Parse utilization value, clamping to 0-100 and handling NaN/Infinity */

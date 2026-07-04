@@ -1,4 +1,4 @@
-import type { RenderContext } from '../../types.js';
+import type { ModelUsageLimit, RenderContext } from '../../types.js';
 import { isLimitReached } from '../../types.js';
 import { getProviderLabel } from '../../stdin.js';
 import { critical, warning, dim, getQuotaColor, quotaBar, RESET } from '../colors.js';
@@ -34,8 +34,12 @@ export function renderUsageLine(ctx: RenderContext): string | null {
   const threshold = display?.usageThreshold ?? 0;
   const fiveHour = ctx.usageData.fiveHour;
   const sevenDay = ctx.usageData.sevenDay;
+  const modelLimits = (display?.showModelUsage !== false && ctx.usageData.modelLimits)
+    ? ctx.usageData.modelLimits.filter((limit) => limit.utilization !== null)
+    : [];
 
-  const effectiveUsage = Math.max(fiveHour ?? 0, sevenDay ?? 0);
+  const maxModelUsage = modelLimits.reduce((max, limit) => Math.max(max, limit.utilization ?? 0), 0);
+  const effectiveUsage = Math.max(fiveHour ?? 0, sevenDay ?? 0, maxModelUsage);
   if (effectiveUsage < threshold) {
     return null;
   }
@@ -56,6 +60,7 @@ export function renderUsageLine(ctx: RenderContext): string | null {
   const syncingSuffix = ctx.usageData.apiError === 'rate-limited'
     ? ` ${dim('(syncing...)')}`
     : '';
+  const parts = [fiveHourPart];
   if (sevenDay !== null && sevenDay >= sevenDayThreshold) {
     const sevenDayDisplay = formatUsagePercent(sevenDay, colors);
     const sevenDayReset = formatResetTime(ctx.usageData.sevenDayResetAt);
@@ -66,10 +71,31 @@ export function renderUsageLine(ctx: RenderContext): string | null {
       : (sevenDayReset
           ? `7d: ${sevenDayDisplay} (${sevenDayReset})`
           : `7d: ${sevenDayDisplay}`);
-    return `${fiveHourPart} | ${sevenDayPart}${syncingSuffix}`;
+    parts.push(sevenDayPart);
   }
 
-  return `${fiveHourPart}${syncingSuffix}`;
+  for (const limit of modelLimits) {
+    parts.push(formatModelLimitPart(limit, usageBarEnabled, colors));
+  }
+
+  return `${parts.join(' | ')}${syncingSuffix}`;
+}
+
+function formatModelLimitPart(
+  limit: ModelUsageLimit,
+  usageBarEnabled: boolean,
+  colors?: RenderContext['config']['colors']
+): string {
+  const percentDisplay = formatUsagePercent(limit.utilization, colors);
+  const reset = formatResetTime(limit.resetAt);
+  if (usageBarEnabled) {
+    return reset
+      ? `${limit.model} ${quotaBar(limit.utilization ?? 0, 10, colors)} ${percentDisplay} (${reset})`
+      : `${limit.model} ${quotaBar(limit.utilization ?? 0, 10, colors)} ${percentDisplay}`;
+  }
+  return reset
+    ? `${limit.model}: ${percentDisplay} (${reset})`
+    : `${limit.model}: ${percentDisplay}`;
 }
 
 function formatUsagePercent(percent: number | null, colors?: RenderContext['config']['colors']): string {

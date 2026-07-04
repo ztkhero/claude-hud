@@ -9,6 +9,16 @@ interface UsageApiResponse {
         utilization?: number;
         resets_at?: string;
     };
+    limits?: Array<{
+        kind?: string;
+        percent?: number;
+        resets_at?: string;
+        scope?: {
+            model?: {
+                display_name?: string | null;
+            } | null;
+        } | null;
+    } | null>;
 }
 interface UsageApiResult {
     data: UsageApiResponse | null;

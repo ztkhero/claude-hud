@@ -45,12 +45,19 @@ export interface UsageWindow {
     utilization: number | null;
     resetAt: Date | null;
 }
+/** Per-model weekly limit (e.g. Fable) from the OAuth API `limits` array */
+export interface ModelUsageLimit {
+    model: string;
+    utilization: number | null;
+    resetAt: Date | null;
+}
 export interface UsageData {
     planName: string | null;
     fiveHour: number | null;
     sevenDay: number | null;
     fiveHourResetAt: Date | null;
     sevenDayResetAt: Date | null;
+    modelLimits?: ModelUsageLimit[];
     apiUnavailable?: boolean;
     apiError?: string;
 }

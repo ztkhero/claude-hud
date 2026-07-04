@@ -139,7 +139,11 @@ export function renderSessionLine(ctx) {
             const usageThreshold = display?.usageThreshold ?? 0;
             const fiveHour = ctx.usageData.fiveHour;
             const sevenDay = ctx.usageData.sevenDay;
-            const effectiveUsage = Math.max(fiveHour ?? 0, sevenDay ?? 0);
+            const modelLimits = (display?.showModelUsage !== false && ctx.usageData.modelLimits)
+                ? ctx.usageData.modelLimits.filter((limit) => limit.utilization !== null)
+                : [];
+            const maxModelUsage = modelLimits.reduce((max, limit) => Math.max(max, limit.utilization ?? 0), 0);
+            const effectiveUsage = Math.max(fiveHour ?? 0, sevenDay ?? 0, maxModelUsage);
             if (effectiveUsage >= usageThreshold) {
                 const syncingSuffix = ctx.usageData.apiError === 'rate-limited'
                     ? ` ${dim('(syncing...)')}`
@@ -155,6 +159,7 @@ export function renderSessionLine(ctx) {
                         ? `5h: ${fiveHourDisplay} (${fiveHourReset})`
                         : `5h: ${fiveHourDisplay}`);
                 const sevenDayThreshold = display?.sevenDayThreshold ?? 80;
+                const usageParts = [fiveHourPart];
                 if (sevenDay !== null && sevenDay >= sevenDayThreshold) {
                     const sevenDayDisplay = formatUsagePercent(sevenDay, colors);
                     const sevenDayReset = formatResetTime(ctx.usageData.sevenDayResetAt);
@@ -165,11 +170,20 @@ export function renderSessionLine(ctx) {
                         : (sevenDayReset
                             ? `7d: ${sevenDayDisplay} (${sevenDayReset})`
                             : `7d: ${sevenDayDisplay}`);
-                    parts.push(`${fiveHourPart} | ${sevenDayPart}${syncingSuffix}`);
+                    usageParts.push(sevenDayPart);
                 }
-                else {
-                    parts.push(`${fiveHourPart}${syncingSuffix}`);
+                for (const limit of modelLimits) {
+                    const percentDisplay = formatUsagePercent(limit.utilization, colors);
+                    const reset = formatResetTime(limit.resetAt);
+                    usageParts.push(usageBarEnabled
+                        ? (reset
+                            ? `${limit.model} ${quotaBar(limit.utilization ?? 0, 10, colors)} ${percentDisplay} (${reset} / 7d)`
+                            : `${limit.model} ${quotaBar(limit.utilization ?? 0, 10, colors)} ${percentDisplay}`)
+                        : (reset
+                            ? `${limit.model}: ${percentDisplay} (${reset})`
+                            : `${limit.model}: ${percentDisplay}`));
                 }
+                parts.push(`${usageParts.join(' | ')}${syncingSuffix}`);
             }
         }
     }

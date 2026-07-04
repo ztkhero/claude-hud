@@ -581,6 +581,74 @@ describe('getUsage', () => {
     assert.equal(result?.planName, 'Team');
   });
 
+  test('parses model-scoped weekly limits from limits array', async () => {
+    await writeCredentials(tempHome, buildCredentials());
+    const result = await getUsage({
+      homeDir: () => tempHome,
+      fetchApi: async () => buildApiResult({
+        data: buildApiResponse({
+          limits: [
+            { kind: 'session', group: 'session', percent: 25, resets_at: '2026-01-06T15:00:00Z', scope: null },
+            { kind: 'weekly_all', group: 'weekly', percent: 10, resets_at: '2026-01-13T00:00:00Z', scope: null },
+            {
+              kind: 'weekly_scoped',
+              group: 'weekly',
+              percent: 42,
+              resets_at: '2026-01-13T00:00:00Z',
+              scope: { model: { id: null, display_name: 'Fable' }, surface: null },
+            },
+            // Scoped limit without a model name should be ignored
+            { kind: 'weekly_scoped', group: 'weekly', percent: 5, scope: { model: null, surface: 'cowork' } },
+            null,
+          ],
+        }),
+      }),
+      now: () => 1000,
+      readKeychain: () => null,
+    });
+
+    assert.equal(result?.modelLimits?.length, 1);
+    assert.equal(result?.modelLimits?.[0].model, 'Fable');
+    assert.equal(result?.modelLimits?.[0].utilization, 42);
+    assert.ok(result?.modelLimits?.[0].resetAt instanceof Date);
+  });
+
+  test('omits modelLimits when limits array has no model-scoped entries', async () => {
+    await writeCredentials(tempHome, buildCredentials());
+    const result = await getUsage({
+      homeDir: () => tempHome,
+      fetchApi: async () => buildApiResult(),
+      now: () => 1000,
+      readKeychain: () => null,
+    });
+
+    assert.equal(result?.modelLimits, undefined);
+  });
+
+  test('hydrates modelLimits resetAt as Date from file cache', async () => {
+    await writeCredentials(tempHome, buildCredentials());
+    let nowValue = 1000;
+    const fetchApi = async () => buildApiResult({
+      data: buildApiResponse({
+        limits: [{
+          kind: 'weekly_scoped',
+          percent: 17,
+          resets_at: '2026-01-13T00:00:00Z',
+          scope: { model: { display_name: 'Fable' } },
+        }],
+      }),
+    });
+
+    await getUsage({ homeDir: () => tempHome, fetchApi, now: () => nowValue, readKeychain: () => null });
+
+    nowValue += 10_000; // Within cache TTL — served from file cache
+    const cached = await getUsage({ homeDir: () => tempHome, fetchApi, now: () => nowValue, readKeychain: () => null });
+
+    assert.equal(cached?.modelLimits?.[0].model, 'Fable');
+    assert.equal(cached?.modelLimits?.[0].utilization, 17);
+    assert.ok(cached?.modelLimits?.[0].resetAt instanceof Date);
+  });
+
   test('returns apiUnavailable and caches failures', async () => {
     await writeCredentials(tempHome, buildCredentials());
     let fetchCalls = 0;

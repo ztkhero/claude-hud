@@ -52,12 +52,20 @@ export interface UsageWindow {
   resetAt: Date | null;
 }
 
+/** Per-model weekly limit (e.g. Fable) from the OAuth API `limits` array */
+export interface ModelUsageLimit {
+  model: string;            // model display name, e.g. 'Fable'
+  utilization: number | null;  // 0-100 percentage, null if unavailable
+  resetAt: Date | null;
+}
+
 export interface UsageData {
   planName: string | null;  // 'Max', 'Pro', or null for API users
   fiveHour: number | null;  // 0-100 percentage, null if unavailable
   sevenDay: number | null;  // 0-100 percentage, null if unavailable
   fiveHourResetAt: Date | null;
   sevenDayResetAt: Date | null;
+  modelLimits?: ModelUsageLimit[];  // model-scoped weekly limits (e.g. Fable)
   apiUnavailable?: boolean; // true if API call failed (user should check DEBUG logs)
   apiError?: string; // short error reason (e.g., 401, timeout)
 }
