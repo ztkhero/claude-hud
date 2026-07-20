@@ -1,4 +1,4 @@
-import type { ModelUsageLimit, RenderContext } from '../../types.js';
+import type { ModelUsageLimit, RenderContext, SpendData } from '../../types.js';
 import { isLimitReached } from '../../types.js';
 import { getProviderLabel } from '../../stdin.js';
 import { critical, warning, dim, getQuotaColor, quotaBar, RESET } from '../colors.js';
@@ -24,11 +24,16 @@ export function renderUsageLine(ctx: RenderContext): string | null {
     return `${warning(`⚠${errorHint}`, colors)}`;
   }
 
+  const spendPart = display?.showSpend !== false && ctx.usageData.spend
+    ? formatSpendPart(ctx.usageData.spend, colors)
+    : null;
+
   if (isLimitReached(ctx.usageData)) {
     const resetTime = ctx.usageData.fiveHour === 100
       ? formatResetTime(ctx.usageData.fiveHourResetAt)
       : formatResetTime(ctx.usageData.sevenDayResetAt);
-    return `${critical(`⚠ Limit reached${resetTime ? ` (resets ${resetTime})` : ''}`, colors)}`;
+    const limitLine = `${critical(`⚠ Limit reached${resetTime ? ` (resets ${resetTime})` : ''}`, colors)}`;
+    return spendPart ? `${limitLine} | ${spendPart}` : limitLine;
   }
 
   const threshold = display?.usageThreshold ?? 0;
@@ -50,8 +55,8 @@ export function renderUsageLine(ctx: RenderContext): string | null {
   const usageBarEnabled = display?.usageBarEnabled ?? true;
   const fiveHourPart = usageBarEnabled
     ? (fiveHourReset
-        ? `${quotaBar(fiveHour ?? 0, 10, colors)} ${fiveHourDisplay} (${fiveHourReset})`
-        : `${quotaBar(fiveHour ?? 0, 10, colors)} ${fiveHourDisplay}`)
+        ? `${quotaBar(fiveHour ?? 0, 5, colors)} ${fiveHourDisplay} (${fiveHourReset})`
+        : `${quotaBar(fiveHour ?? 0, 5, colors)} ${fiveHourDisplay}`)
     : (fiveHourReset
         ? `5h: ${fiveHourDisplay} (${fiveHourReset})`
         : `5h: ${fiveHourDisplay}`);
@@ -66,8 +71,8 @@ export function renderUsageLine(ctx: RenderContext): string | null {
     const sevenDayReset = formatResetTime(ctx.usageData.sevenDayResetAt);
     const sevenDayPart = usageBarEnabled
       ? (sevenDayReset
-          ? `${quotaBar(sevenDay, 10, colors)} ${sevenDayDisplay} (${sevenDayReset})`
-          : `${quotaBar(sevenDay, 10, colors)} ${sevenDayDisplay}`)
+          ? `${quotaBar(sevenDay, 5, colors)} ${sevenDayDisplay} (${sevenDayReset})`
+          : `${quotaBar(sevenDay, 5, colors)} ${sevenDayDisplay}`)
       : (sevenDayReset
           ? `7d: ${sevenDayDisplay} (${sevenDayReset})`
           : `7d: ${sevenDayDisplay}`);
@@ -78,7 +83,44 @@ export function renderUsageLine(ctx: RenderContext): string | null {
     parts.push(formatModelLimitPart(limit, usageBarEnabled, colors));
   }
 
+  if (spendPart) {
+    parts.push(spendPart);
+  }
+
   return `${parts.join(' | ')}${syncingSuffix}`;
+}
+
+/** Format extra-usage credit spend as `$57.60/$50.00`, colored by percent used */
+export function formatSpendPart(
+  spend: SpendData,
+  colors?: RenderContext['config']['colors']
+): string | null {
+  const used = formatMoney(spend.usedMinor, spend.currency, spend.exponent);
+  if (used === null) return null;
+
+  const color = getQuotaColor(spend.percent ?? 0, colors);
+  const limit = spend.limitMinor !== null
+    ? formatMoney(spend.limitMinor, spend.currency, spend.exponent)
+    : null;
+
+  return limit !== null
+    ? `${color}${used}${RESET}${dim(`/${limit}`)}`
+    : `${color}${used}${RESET}`;
+}
+
+function formatMoney(amountMinor: number, currency: string, exponent: number): string | null {
+  const amount = amountMinor / Math.pow(10, exponent);
+  if (!Number.isFinite(amount)) return null;
+  try {
+    // narrowSymbol renders AUD/CAD/etc. as plain "$" rather than "A$"
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency,
+      currencyDisplay: 'narrowSymbol',
+    }).format(amount);
+  } catch {
+    return `$${amount.toFixed(exponent)}`;
+  }
 }
 
 function formatModelLimitPart(
@@ -89,7 +131,7 @@ function formatModelLimitPart(
   // No reset countdown: model limits share the weekly window, so it would duplicate the 7d reset
   const percentDisplay = formatUsagePercent(limit.utilization, colors);
   return usageBarEnabled
-    ? `${limit.model} ${quotaBar(limit.utilization ?? 0, 10, colors)} ${percentDisplay}`
+    ? `${limit.model} ${quotaBar(limit.utilization ?? 0, 5, colors)} ${percentDisplay}`
     : `${limit.model}: ${percentDisplay}`;
 }
 

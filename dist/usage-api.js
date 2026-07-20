@@ -355,6 +355,7 @@ export async function getUsage(overrides = {}) {
         const fiveHourResetAt = parseDate(apiResult.data.five_hour?.resets_at);
         const sevenDayResetAt = parseDate(apiResult.data.seven_day?.resets_at);
         const modelLimits = parseModelLimits(apiResult.data.limits);
+        const spend = parseSpend(apiResult.data.spend);
         const result = {
             planName,
             fiveHour,
@@ -364,6 +365,9 @@ export async function getUsage(overrides = {}) {
         };
         if (modelLimits.length > 0) {
             result.modelLimits = modelLimits;
+        }
+        if (spend) {
+            result.spend = spend;
         }
         // Write to file cache — also store as lastGoodData for rate-limit resilience
         writeCache(homeDir, result, now, { lastGoodData: result });
@@ -694,6 +698,31 @@ function parseModelLimits(limits) {
         });
     }
     return result;
+}
+/** Extract extra-usage credit spend from the API `spend` object */
+function parseSpend(spend) {
+    const used = spend?.used;
+    if (!used || typeof used.amount_minor !== 'number' || !Number.isFinite(used.amount_minor)) {
+        return null;
+    }
+    const limit = spend.limit;
+    const limitMinor = (limit && typeof limit.amount_minor === 'number' && Number.isFinite(limit.amount_minor))
+        ? limit.amount_minor
+        : null;
+    const currency = typeof used.currency === 'string' && used.currency.trim()
+        ? used.currency.trim().toUpperCase()
+        : 'USD';
+    const exponent = (typeof used.exponent === 'number' && Number.isInteger(used.exponent)
+        && used.exponent >= 0 && used.exponent <= 4)
+        ? used.exponent
+        : 2;
+    return {
+        usedMinor: used.amount_minor,
+        limitMinor,
+        currency,
+        exponent,
+        percent: parseUtilization(spend.percent),
+    };
 }
 /** Parse utilization value, clamping to 0-100 and handling NaN/Infinity */
 function parseUtilization(value) {

@@ -34,6 +34,7 @@ export const DEFAULT_CONFIG = {
         showTokenBreakdown: true,
         showUsage: true,
         showModelUsage: true,
+        showSpend: true,
         usageBarEnabled: true,
         showTools: false,
         showAgents: false,
@@ -195,6 +196,9 @@ export function mergeConfig(userConfig) {
         showModelUsage: typeof migrated.display?.showModelUsage === 'boolean'
             ? migrated.display.showModelUsage
             : DEFAULT_CONFIG.display.showModelUsage,
+        showSpend: typeof migrated.display?.showSpend === 'boolean'
+            ? migrated.display.showSpend
+            : DEFAULT_CONFIG.display.showSpend,
         usageBarEnabled: typeof migrated.display?.usageBarEnabled === 'boolean'
             ? migrated.display.usageBarEnabled
             : DEFAULT_CONFIG.display.usageBarEnabled,

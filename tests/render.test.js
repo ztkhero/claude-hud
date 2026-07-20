@@ -754,6 +754,87 @@ test('renderUsageLine skips model limits with null utilization', () => {
   assert.ok(!line.includes('Fable'), `should skip model limit without utilization: ${line}`);
 });
 
+test('renderUsageLine shows extra-usage spend as $used/$limit', () => {
+  const ctx = baseContext();
+  ctx.config.display.usageBarEnabled = false;
+  ctx.usageData = {
+    planName: 'Max',
+    fiveHour: 12,
+    sevenDay: 17,
+    fiveHourResetAt: null,
+    sevenDayResetAt: null,
+    spend: { usedMinor: 5760, limitMinor: 5000, currency: 'AUD', exponent: 2, percent: 100 },
+  };
+
+  const line = stripAnsi(renderUsageLine(ctx));
+  assert.ok(line.includes('$57.60/$50.00'), `should include spend: ${line}`);
+});
+
+test('renderUsageLine shows spend without limit when limit is null', () => {
+  const ctx = baseContext();
+  ctx.config.display.usageBarEnabled = false;
+  ctx.usageData = {
+    planName: 'Max',
+    fiveHour: 12,
+    sevenDay: 17,
+    fiveHourResetAt: null,
+    sevenDayResetAt: null,
+    spend: { usedMinor: 1234, limitMinor: null, currency: 'USD', exponent: 2, percent: 50 },
+  };
+
+  const line = stripAnsi(renderUsageLine(ctx));
+  assert.ok(line.includes('$12.34'), `should include used spend: ${line}`);
+  assert.ok(!line.includes('$12.34/'), `should not include limit separator: ${line}`);
+});
+
+test('renderUsageLine hides spend when showSpend is false', () => {
+  const ctx = baseContext();
+  ctx.config.display.usageBarEnabled = false;
+  ctx.config.display.showSpend = false;
+  ctx.usageData = {
+    planName: 'Max',
+    fiveHour: 12,
+    sevenDay: 17,
+    fiveHourResetAt: null,
+    sevenDayResetAt: null,
+    spend: { usedMinor: 5760, limitMinor: 5000, currency: 'AUD', exponent: 2, percent: 100 },
+  };
+
+  const line = stripAnsi(renderUsageLine(ctx));
+  assert.ok(!line.includes('$57.60'), `should not include spend: ${line}`);
+});
+
+test('renderUsageLine appends spend to limit reached line', () => {
+  const ctx = baseContext();
+  ctx.usageData = {
+    planName: 'Max',
+    fiveHour: 100,
+    sevenDay: 45,
+    fiveHourResetAt: null,
+    sevenDayResetAt: null,
+    spend: { usedMinor: 5760, limitMinor: 5000, currency: 'AUD', exponent: 2, percent: 100 },
+  };
+
+  const line = stripAnsi(renderUsageLine(ctx));
+  assert.ok(line.includes('Limit reached'), `should include limit reached: ${line}`);
+  assert.ok(line.includes('$57.60/$50.00'), `should include spend alongside limit warning: ${line}`);
+});
+
+test('renderSessionLine shows extra-usage spend', () => {
+  const ctx = baseContext();
+  ctx.usageData = {
+    planName: 'Max',
+    fiveHour: 12,
+    sevenDay: 17,
+    fiveHourResetAt: null,
+    sevenDayResetAt: null,
+    spend: { usedMinor: 5760, limitMinor: 5000, currency: 'AUD', exponent: 2, percent: 100 },
+  };
+
+  const line = stripAnsi(renderSessionLine(ctx));
+  assert.ok(line.includes('$57.60/$50.00'), `should include spend: ${line}`);
+});
+
 test('renderSessionLine shows model-scoped weekly limits', () => {
   const ctx = baseContext();
   ctx.usageData = {
@@ -934,9 +1015,9 @@ test('renderUsageLine uses custom usage palette overrides', () => {
 
   const line = renderUsageLine(ctx);
   assert.ok(line, 'should render usage line');
-  assert.ok(line.includes('\x1b[36m███'), `expected custom usage bar color, got: ${JSON.stringify(line)}`);
+  assert.ok(line.includes('\x1b[36m█\x1b[2m░'), `expected custom usage bar color, got: ${JSON.stringify(line)}`);
   assert.ok(line.includes('\x1b[36m25%\x1b[0m'), `expected custom usage percentage color, got: ${JSON.stringify(line)}`);
-  assert.ok(line.includes('\x1b[35m████████'), `expected custom usage warning color, got: ${JSON.stringify(line)}`);
+  assert.ok(line.includes('\x1b[35m████\x1b[2m░'), `expected custom usage warning color, got: ${JSON.stringify(line)}`);
   assert.ok(line.includes('\x1b[35m80%\x1b[0m'), `expected custom usage warning percentage color, got: ${JSON.stringify(line)}`);
 });
 

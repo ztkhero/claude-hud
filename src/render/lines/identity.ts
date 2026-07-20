@@ -23,7 +23,7 @@ export function renderIdentityLine(ctx: RenderContext): string {
   const usedSize = `${formatK(getTotalTokens(ctx.stdin))} `;
 
   let line = display?.showContextBar !== false
-    ? `${usedSize}${coloredBar(percent, 10, colors)} ${contextValueDisplay}`
+    ? `${usedSize}${coloredBar(percent, 5, colors)} ${contextValueDisplay}`
     : `${usedSize}${contextValueDisplay}`;
 
   if (display?.showTokenBreakdown !== false && percent >= 85) {

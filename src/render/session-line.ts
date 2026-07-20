@@ -2,6 +2,7 @@ import type { RenderContext } from '../types.js';
 import { isLimitReached } from '../types.js';
 import { getContextPercent, getBufferedPercent, getModelName, getProviderLabel, getTotalTokens } from '../stdin.js';
 import { getOutputSpeed } from '../speed-tracker.js';
+import { formatSpendPart } from './lines/usage.js';
 import { coloredBar, critical, cyan, dim, magenta, red, warning, yellow, getContextColor, getQuotaColor, quotaBar, RESET } from './colors.js';
 
 const DEBUG = process.env.DEBUG?.includes('claude-hud') || process.env.DEBUG === '*';
@@ -23,7 +24,7 @@ export function renderSessionLine(ctx: RenderContext): string {
   }
 
   const colors = ctx.config?.colors;
-  const bar = coloredBar(percent, 10, colors);
+  const bar = coloredBar(percent, 5, colors);
 
   const parts: string[] = [];
   const display = ctx.config?.display;
@@ -140,6 +141,9 @@ export function renderSessionLine(ctx: RenderContext): string {
 
   // Usage limits display (shown when enabled in config, respects usageThreshold)
   if (display?.showUsage !== false && ctx.usageData?.planName && !providerLabel) {
+    const spendPart = display?.showSpend !== false && ctx.usageData.spend
+      ? formatSpendPart(ctx.usageData.spend, colors)
+      : null;
     if (ctx.usageData.apiUnavailable) {
       const errorHint = formatUsageError(ctx.usageData.apiError);
       parts.push(warning(`usage: ⚠${errorHint}`, colors));
@@ -148,6 +152,9 @@ export function renderSessionLine(ctx: RenderContext): string {
         ? formatResetTime(ctx.usageData.fiveHourResetAt)
         : formatResetTime(ctx.usageData.sevenDayResetAt);
       parts.push(critical(`⚠ Limit reached${resetTime ? ` (resets ${resetTime})` : ''}`, colors));
+      if (spendPart) {
+        parts.push(spendPart);
+      }
     } else {
       const usageThreshold = display?.usageThreshold ?? 0;
       const fiveHour = ctx.usageData.fiveHour;
@@ -168,8 +175,8 @@ export function renderSessionLine(ctx: RenderContext): string {
         const usageBarEnabled = display?.usageBarEnabled ?? true;
         const fiveHourPart = usageBarEnabled
           ? (fiveHourReset
-              ? `${quotaBar(fiveHour ?? 0, 10, colors)} ${fiveHourDisplay} (${fiveHourReset} / 5h)`
-              : `${quotaBar(fiveHour ?? 0, 10, colors)} ${fiveHourDisplay}`)
+              ? `${quotaBar(fiveHour ?? 0, 5, colors)} ${fiveHourDisplay} (${fiveHourReset} / 5h)`
+              : `${quotaBar(fiveHour ?? 0, 5, colors)} ${fiveHourDisplay}`)
           : (fiveHourReset
               ? `5h: ${fiveHourDisplay} (${fiveHourReset})`
               : `5h: ${fiveHourDisplay}`);
@@ -181,8 +188,8 @@ export function renderSessionLine(ctx: RenderContext): string {
           const sevenDayReset = formatResetTime(ctx.usageData.sevenDayResetAt);
           const sevenDayPart = usageBarEnabled
             ? (sevenDayReset
-                ? `${quotaBar(sevenDay, 10, colors)} ${sevenDayDisplay} (${sevenDayReset} / 7d)`
-                : `${quotaBar(sevenDay, 10, colors)} ${sevenDayDisplay}`)
+                ? `${quotaBar(sevenDay, 5, colors)} ${sevenDayDisplay} (${sevenDayReset} / 7d)`
+                : `${quotaBar(sevenDay, 5, colors)} ${sevenDayDisplay}`)
             : (sevenDayReset
                 ? `7d: ${sevenDayDisplay} (${sevenDayReset})`
                 : `7d: ${sevenDayDisplay}`);
@@ -192,8 +199,11 @@ export function renderSessionLine(ctx: RenderContext): string {
           // No reset countdown: model limits share the weekly window, so it would duplicate the 7d reset
           const percentDisplay = formatUsagePercent(limit.utilization, colors);
           usageParts.push(usageBarEnabled
-            ? `${limit.model} ${quotaBar(limit.utilization ?? 0, 10, colors)} ${percentDisplay}`
+            ? `${limit.model} ${quotaBar(limit.utilization ?? 0, 5, colors)} ${percentDisplay}`
             : `${limit.model}: ${percentDisplay}`);
+        }
+        if (spendPart) {
+          usageParts.push(spendPart);
         }
         parts.push(`${usageParts.join(' | ')}${syncingSuffix}`);
       }

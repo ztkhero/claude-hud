@@ -51,6 +51,14 @@ export interface ModelUsageLimit {
     utilization: number | null;
     resetAt: Date | null;
 }
+/** Extra-usage credit spend from the OAuth API `spend` object */
+export interface SpendData {
+    usedMinor: number;
+    limitMinor: number | null;
+    currency: string;
+    exponent: number;
+    percent: number | null;
+}
 export interface UsageData {
     planName: string | null;
     fiveHour: number | null;
@@ -58,6 +66,7 @@ export interface UsageData {
     fiveHourResetAt: Date | null;
     sevenDayResetAt: Date | null;
     modelLimits?: ModelUsageLimit[];
+    spend?: SpendData;
     apiUnavailable?: boolean;
     apiError?: string;
 }

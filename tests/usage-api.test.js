@@ -649,6 +649,69 @@ describe('getUsage', () => {
     assert.ok(cached?.modelLimits?.[0].resetAt instanceof Date);
   });
 
+  test('parses extra-usage spend from spend object', async () => {
+    await writeCredentials(tempHome, buildCredentials());
+    const result = await getUsage({
+      homeDir: () => tempHome,
+      fetchApi: async () => buildApiResult({
+        data: buildApiResponse({
+          spend: {
+            used: { amount_minor: 5760, currency: 'AUD', exponent: 2 },
+            limit: { amount_minor: 5000, currency: 'AUD', exponent: 2 },
+            percent: 100,
+            severity: 'critical',
+            enabled: false,
+          },
+        }),
+      }),
+      now: () => 1000,
+      readKeychain: () => null,
+    });
+
+    assert.equal(result?.spend?.usedMinor, 5760);
+    assert.equal(result?.spend?.limitMinor, 5000);
+    assert.equal(result?.spend?.currency, 'AUD');
+    assert.equal(result?.spend?.exponent, 2);
+    assert.equal(result?.spend?.percent, 100);
+  });
+
+  test('parses spend with null limit', async () => {
+    await writeCredentials(tempHome, buildCredentials());
+    const result = await getUsage({
+      homeDir: () => tempHome,
+      fetchApi: async () => buildApiResult({
+        data: buildApiResponse({
+          spend: {
+            used: { amount_minor: 1234, currency: 'USD', exponent: 2 },
+            limit: null,
+            percent: 50,
+          },
+        }),
+      }),
+      now: () => 1000,
+      readKeychain: () => null,
+    });
+
+    assert.equal(result?.spend?.usedMinor, 1234);
+    assert.equal(result?.spend?.limitMinor, null);
+  });
+
+  test('omits spend when used amount is missing', async () => {
+    await writeCredentials(tempHome, buildCredentials());
+    const result = await getUsage({
+      homeDir: () => tempHome,
+      fetchApi: async () => buildApiResult({
+        data: buildApiResponse({
+          spend: { used: null, limit: { amount_minor: 5000, currency: 'AUD', exponent: 2 } },
+        }),
+      }),
+      now: () => 1000,
+      readKeychain: () => null,
+    });
+
+    assert.equal(result?.spend, undefined);
+  });
+
   test('returns apiUnavailable and caches failures', async () => {
     await writeCredentials(tempHome, buildCredentials());
     let fetchCalls = 0;

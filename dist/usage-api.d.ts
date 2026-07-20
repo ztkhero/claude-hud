@@ -19,6 +19,16 @@ interface UsageApiResponse {
             } | null;
         } | null;
     } | null>;
+    spend?: {
+        used?: ApiMoney | null;
+        limit?: ApiMoney | null;
+        percent?: number;
+    } | null;
+}
+interface ApiMoney {
+    amount_minor?: number;
+    currency?: string;
+    exponent?: number;
 }
 interface UsageApiResult {
     data: UsageApiResponse | null;

@@ -6,7 +6,7 @@ import * as tls from 'tls';
 import * as https from 'https';
 import { execFileSync } from 'child_process';
 import { createHash } from 'crypto';
-import type { ModelUsageLimit, UsageData } from './types.js';
+import type { ModelUsageLimit, SpendData, UsageData } from './types.js';
 import { createDebug } from './debug.js';
 import { getClaudeConfigDir, getHudPluginDir } from './claude-config-dir.js';
 
@@ -45,6 +45,17 @@ interface UsageApiResponse {
       } | null;
     } | null;
   } | null>;
+  spend?: {
+    used?: ApiMoney | null;
+    limit?: ApiMoney | null;
+    percent?: number;
+  } | null;
+}
+
+interface ApiMoney {
+  amount_minor?: number;
+  currency?: string;
+  exponent?: number;
 }
 
 interface UsageApiResult {
@@ -475,6 +486,7 @@ export async function getUsage(overrides: Partial<UsageApiDeps> = {}): Promise<U
     const fiveHourResetAt = parseDate(apiResult.data.five_hour?.resets_at);
     const sevenDayResetAt = parseDate(apiResult.data.seven_day?.resets_at);
     const modelLimits = parseModelLimits(apiResult.data.limits);
+    const spend = parseSpend(apiResult.data.spend);
 
     const result: UsageData = {
       planName,
@@ -485,6 +497,9 @@ export async function getUsage(overrides: Partial<UsageApiDeps> = {}): Promise<U
     };
     if (modelLimits.length > 0) {
       result.modelLimits = modelLimits;
+    }
+    if (spend) {
+      result.spend = spend;
     }
 
     // Write to file cache — also store as lastGoodData for rate-limit resilience
@@ -857,6 +872,35 @@ function parseModelLimits(limits: UsageApiResponse['limits']): ModelUsageLimit[]
     });
   }
   return result;
+}
+
+/** Extract extra-usage credit spend from the API `spend` object */
+function parseSpend(spend: UsageApiResponse['spend']): SpendData | null {
+  const used = spend?.used;
+  if (!used || typeof used.amount_minor !== 'number' || !Number.isFinite(used.amount_minor)) {
+    return null;
+  }
+
+  const limit = spend.limit;
+  const limitMinor = (limit && typeof limit.amount_minor === 'number' && Number.isFinite(limit.amount_minor))
+    ? limit.amount_minor
+    : null;
+
+  const currency = typeof used.currency === 'string' && used.currency.trim()
+    ? used.currency.trim().toUpperCase()
+    : 'USD';
+  const exponent = (typeof used.exponent === 'number' && Number.isInteger(used.exponent)
+    && used.exponent >= 0 && used.exponent <= 4)
+    ? used.exponent
+    : 2;
+
+  return {
+    usedMinor: used.amount_minor,
+    limitMinor,
+    currency,
+    exponent,
+    percent: parseUtilization(spend.percent),
+  };
 }
 
 /** Parse utilization value, clamping to 0-100 and handling NaN/Infinity */

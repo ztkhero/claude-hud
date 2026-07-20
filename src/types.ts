@@ -59,6 +59,15 @@ export interface ModelUsageLimit {
   resetAt: Date | null;
 }
 
+/** Extra-usage credit spend from the OAuth API `spend` object */
+export interface SpendData {
+  usedMinor: number;        // amount in minor units (e.g. cents)
+  limitMinor: number | null;
+  currency: string;         // ISO 4217 code, e.g. 'USD', 'AUD'
+  exponent: number;         // minor unit exponent (2 for cents)
+  percent: number | null;   // 0-100 percentage, null if unavailable
+}
+
 export interface UsageData {
   planName: string | null;  // 'Max', 'Pro', or null for API users
   fiveHour: number | null;  // 0-100 percentage, null if unavailable
@@ -66,6 +75,7 @@ export interface UsageData {
   fiveHourResetAt: Date | null;
   sevenDayResetAt: Date | null;
   modelLimits?: ModelUsageLimit[];  // model-scoped weekly limits (e.g. Fable)
+  spend?: SpendData;        // extra-usage credit spend (e.g. $57.60/$50.00)
   apiUnavailable?: boolean; // true if API call failed (user should check DEBUG logs)
   apiError?: string; // short error reason (e.g., 401, timeout)
 }
