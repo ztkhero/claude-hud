@@ -14,6 +14,21 @@ function stripAnsi(str) {
   return str.replace(/\x1b\[[0-9;]*m/g, '');
 }
 
+// The context and usage lines carry no text label since the label refactor, so
+// identify them by shape: context leads with the used-token size ("12K ░░░░░ 93%"),
+// and usage — with usageBarEnabled false, as baseContext sets — leads with its
+// window ("5h: 30%"). Both also appear after " │ " on a combined line.
+const CONTEXT_LINE = /(^|│ )\d+K /;
+const USAGE_LINE = /(^|│ )5h: \d+%/;
+
+function isContextLine(line) {
+  return CONTEXT_LINE.test(stripAnsi(line));
+}
+
+function isUsageLine(line) {
+  return USAGE_LINE.test(stripAnsi(line));
+}
+
 function baseContext() {
   return {
     stdin: {
@@ -193,17 +208,13 @@ test('render expanded layout supports remaining-based context display', () => {
   ctx.stdin.context_window.context_window_size = 200000;
   ctx.stdin.context_window.current_usage.input_tokens = 12345;
 
-  const logs = [];
-  const originalLog = console.log;
-  console.log = (line) => logs.push(line);
-  try {
-    render(ctx);
-  } finally {
-    console.log = originalLog;
-  }
+  const lines = captureRenderLines(ctx);
 
   // 12345/200k = 6.17% raw, scale ≈ 0.026, buffer ≈ 858 → 7% buffered → 93% remaining
-  assert.ok(logs.some(line => line.includes('Context') && line.includes('93%')), 'expected remaining percentage on context line');
+  assert.ok(
+    lines.some(line => isContextLine(line) && line.includes('93%')),
+    `expected remaining percentage on context line, got: ${JSON.stringify(lines)}`
+  );
 });
 
 test('renderSessionLine omits project name when cwd is undefined', () => {
@@ -1227,7 +1238,7 @@ test('render expanded layout honors custom elementOrder including activity place
   const lines = captureRenderLines(ctx);
   const toolIndex = lines.findIndex(line => line.includes('Read'));
   const projectIndex = lines.findIndex(line => line.includes('my-project'));
-  const combinedIndex = lines.findIndex(line => line.includes('Usage') && line.includes('Context'));
+  const combinedIndex = lines.findIndex(line => isUsageLine(line) && isContextLine(line));
   const environmentIndex = lines.findIndex(line => line.includes('CLAUDE.md'));
   const agentIndex = lines.findIndex(line => line.includes('planner'));
   const todoIndex = lines.findIndex(line => line.includes('todo-marker'));
@@ -1267,12 +1278,13 @@ test('render expanded layout omits elements not present in elementOrder', () => 
   ];
   ctx.config.elementOrder = ['project', 'tools'];
 
-  const output = captureRenderLines(ctx).join('\n');
+  const lines = captureRenderLines(ctx);
+  const output = lines.join('\n');
 
   assert.ok(output.includes('my-project'), 'project should render when included');
   assert.ok(output.includes('Read'), 'tools should render when included');
-  assert.ok(!output.includes('Context'), 'context should be omitted when excluded');
-  assert.ok(!output.includes('Usage'), 'usage should be omitted when excluded');
+  assert.ok(!lines.some(isContextLine), 'context should be omitted when excluded');
+  assert.ok(!lines.some(isUsageLine), 'usage should be omitted when excluded');
   assert.ok(!output.includes('CLAUDE.md'), 'environment should be omitted when excluded');
   assert.ok(!output.includes('planner'), 'agents should be omitted when excluded');
   assert.ok(!output.includes('todo-marker'), 'todos should be omitted when excluded');
@@ -1293,8 +1305,8 @@ test('render expanded layout combines usage and context when adjacent in element
   const lines = captureRenderLines(ctx);
 
   assert.equal(lines.length, 1, 'adjacent usage and context should share one expanded line');
-  assert.ok(lines[0].includes('Usage'), 'combined line should include usage');
-  assert.ok(lines[0].includes('Context'), 'combined line should include context');
+  assert.ok(isUsageLine(lines[0]), `combined line should include usage: ${lines[0]}`);
+  assert.ok(isContextLine(lines[0]), `combined line should include context: ${lines[0]}`);
   assert.ok(lines[0].includes('│'), 'combined line should preserve the shared separator');
 });
 
@@ -1312,9 +1324,9 @@ test('render expanded layout keeps usage and context separate when not adjacent'
   ctx.config.elementOrder = ['usage', 'project', 'context'];
 
   const lines = captureRenderLines(ctx);
-  const usageLine = lines.find(line => line.includes('Usage'));
-  const contextLine = lines.find(line => line.includes('Context'));
-  const combinedLine = lines.find(line => line.includes('Usage') && line.includes('Context'));
+  const usageLine = lines.find(isUsageLine);
+  const contextLine = lines.find(isContextLine);
+  const combinedLine = lines.find(line => isUsageLine(line) && isContextLine(line));
 
   assert.ok(usageLine, 'usage should render on its own line');
   assert.ok(contextLine, 'context should render on its own line');
