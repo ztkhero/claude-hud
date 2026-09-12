@@ -275,3 +275,31 @@ test('mergeConfig falls back to defaults for invalid usage values', () => {
   assert.equal(config.usage.cacheTtlSeconds, DEFAULT_CONFIG.usage.cacheTtlSeconds);
   assert.equal(config.usage.failureCacheTtlSeconds, DEFAULT_CONFIG.usage.failureCacheTtlSeconds);
 });
+
+test('mergeConfig defaults the prompt cache timer to auto-detection', () => {
+  const config = mergeConfig({});
+  assert.equal(config.display.showCacheTimer, true);
+  assert.equal(config.display.promptCacheTtlSeconds, 'auto');
+});
+
+test('mergeConfig accepts a custom prompt cache TTL and rejects invalid values', () => {
+  assert.equal(
+    mergeConfig({ display: { promptCacheTtlSeconds: 3600, showCacheTimer: false } })
+      .display.promptCacheTtlSeconds,
+    3600
+  );
+  assert.equal(
+    mergeConfig({ display: { promptCacheTtlSeconds: 3600, showCacheTimer: false } })
+      .display.showCacheTimer,
+    false
+  );
+  assert.equal(mergeConfig({ display: { promptCacheTtlSeconds: 'auto' } }).display.promptCacheTtlSeconds, 'auto');
+  assert.equal(
+    mergeConfig({ display: { promptCacheTtlSeconds: 0 } }).display.promptCacheTtlSeconds,
+    DEFAULT_CONFIG.display.promptCacheTtlSeconds
+  );
+  assert.equal(
+    mergeConfig({ display: { promptCacheTtlSeconds: 'nope' } }).display.promptCacheTtlSeconds,
+    DEFAULT_CONFIG.display.promptCacheTtlSeconds
+  );
+});

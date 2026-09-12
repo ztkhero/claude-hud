@@ -864,3 +864,86 @@ test('Issue #3: MCP count updates correctly when servers are disabled', async ()
     await rm(homeDir, { recursive: true, force: true });
   }
 });
+
+test('parseTranscript tracks the last main-conversation request send time', async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'claude-hud-'));
+  const filePath = path.join(dir, 'last-request.jsonl');
+  const lines = [
+    JSON.stringify({ type: 'user', timestamp: '2024-01-01T00:00:00.000Z' }),
+    JSON.stringify({ type: 'assistant', timestamp: '2024-01-01T00:00:05.000Z' }),
+    JSON.stringify({ type: 'user', timestamp: '2024-01-01T00:01:00.000Z' }),
+    // Subagent traffic uses its own cache prefix and must not reset the timer
+    JSON.stringify({ type: 'user', isSidechain: true, timestamp: '2024-01-01T00:02:00.000Z' }),
+    JSON.stringify({ type: 'assistant', timestamp: '2024-01-01T00:03:00.000Z' }),
+  ];
+
+  await writeFile(filePath, lines.join('\n'), 'utf8');
+
+  try {
+    const result = await parseTranscript(filePath);
+    assert.equal(result.lastRequestAt?.toISOString(), '2024-01-01T00:01:00.000Z');
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('parseTranscript leaves lastRequestAt undefined without user entries', async () => {
+  const fixturePath = fileURLToPath(new URL('./fixtures/transcript-render.jsonl', import.meta.url));
+  const result = await parseTranscript(fixturePath);
+  assert.equal(result.lastRequestAt, undefined);
+});
+
+test('parseTranscript detects the 1-hour prompt cache lifetime', async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'claude-hud-'));
+  const filePath = path.join(dir, 'cache-ttl-1h.jsonl');
+  const usage = (fiveMin, oneHour) => ({
+    cache_creation: {
+      ephemeral_5m_input_tokens: fiveMin,
+      ephemeral_1h_input_tokens: oneHour,
+    },
+  });
+  const lines = [
+    JSON.stringify({ type: 'assistant', message: { usage: usage(0, 2906) } }),
+    // Cache-read-only requests report zeros and must not clear the detection
+    JSON.stringify({ type: 'assistant', message: { usage: usage(0, 0) } }),
+    // Subagents use their own cache prefix and must not relabel the session
+    JSON.stringify({ type: 'assistant', isSidechain: true, message: { usage: usage(512, 0) } }),
+  ];
+
+  await writeFile(filePath, lines.join('\n'), 'utf8');
+
+  try {
+    const result = await parseTranscript(filePath);
+    assert.equal(result.cacheTtlSeconds, 3600);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('parseTranscript detects the 5-minute prompt cache lifetime', async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'claude-hud-'));
+  const filePath = path.join(dir, 'cache-ttl-5m.jsonl');
+  const lines = [
+    JSON.stringify({
+      type: 'assistant',
+      message: {
+        usage: { cache_creation: { ephemeral_5m_input_tokens: 1200, ephemeral_1h_input_tokens: 0 } },
+      },
+    }),
+  ];
+
+  await writeFile(filePath, lines.join('\n'), 'utf8');
+
+  try {
+    const result = await parseTranscript(filePath);
+    assert.equal(result.cacheTtlSeconds, 300);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('parseTranscript leaves cacheTtlSeconds undefined when no cache write is reported', async () => {
+  const fixturePath = fileURLToPath(new URL('./fixtures/transcript-basic.jsonl', import.meta.url));
+  const result = await parseTranscript(fixturePath);
+  assert.equal(result.cacheTtlSeconds, undefined);
+});

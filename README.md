@@ -146,6 +146,8 @@ Edit `~/.claude/plugins/claude-hud/config.json` directly for advanced settings s
 | `display.showSpeed` | boolean | false | Show output token speed `out: 42.1 tok/s` |
 | `display.showUsage` | boolean | true | Show usage limits (Pro/Max/Team only) |
 | `display.showModelUsage` | boolean | true | Show model-scoped weekly limits (e.g. Fable) when reported by the API |
+| `display.showCacheTimer` | boolean | true | Show the prompt-cache countdown `⧗ 41m` |
+| `display.promptCacheTtlSeconds` | `auto` \| number | `auto` | Prompt cache TTL the countdown is based on. `auto` detects 5-minute vs 1-hour caching from the transcript; a number pins it |
 | `display.usageBarEnabled` | boolean | true | Display usage as visual bar instead of text |
 | `display.sevenDayThreshold` | 0-100 | 80 | Show 7-day usage when >= threshold (0 = always) |
 | `display.showTokenBreakdown` | boolean | true | Show token details at high context (85%+) |
@@ -180,6 +182,28 @@ Usage ██░░░░░░░░ 25% (1h 30m / 5h) | Fable ██░░░�
 ```
 
 To disable, set `display.showUsage` to `false` (all usage) or `display.showModelUsage` to `false` (model-scoped limits only).
+
+### Transcript Parsing
+
+The statusline re-runs as a fresh process on every render, so parsing the session transcript from byte 0 each time dominates its cost — a 95MB session measures ~186ms per render, and that cost grows for as long as the session lives.
+
+Transcripts are append-only, so renders resume from where the previous one stopped: the parsed accumulator and its byte offset are cached under `~/.claude/plugins/claude-hud/transcript-cache/`, and only the newly appended lines are folded in. Measured on a real 95MB transcript, this takes a render's parse from **174ms to 1.8ms**.
+
+The cache is an optimization, never a source of truth. It is skipped entirely for transcripts under 1MB (where a full parse is already ~ms), and any sign that the file is not the same append-only stream — a shrunken file, a rewound mtime, or a fingerprint mismatch across four sampled windows of the already-consumed range — falls back to a full parse. So does an unreadable or malformed cache entry. Set `CLAUDE_HUD_TRANSCRIPT_CACHE=0` to disable it.
+
+### Prompt Cache Timer
+
+A countdown showing how much of the prompt cache window is left before the conversation's cached prefix expires:
+
+```
+Usage ██░░░░░░░░ 25% (1h 30m / 5h) | Fable █████ 94% | ⧗ 41m | $0.00
+```
+
+The window starts when the last API request was **sent** — the transcript's most recent `user` entry (your prompt, or a tool result) — because that is when the request's cache blocks are written and when an existing cache hit refreshes its TTL. Subagent (sidechain) traffic is ignored, since it uses its own cache prefix.
+
+The remaining time is shown at minute granularity, rounded down, so the number reads as an "at least" promise. Seconds would be stale precision: the statusline only re-renders on activity plus whatever `statusLine.refreshInterval` is set to in `settings.json` (Claude Code does no periodic refresh by default). The timer turns yellow in the final quarter of the window and shows `⧗ --` once it lapses, meaning the next request pays for a full cache write instead of a cheap cache read.
+
+The window length is detected automatically from `usage.cache_creation` in the transcript, which reports whether the session writes 5-minute or 1-hour cache blocks. Until the first cache write is seen, it falls back to Anthropic's 5-minute default. To pin it instead, set `display.promptCacheTtlSeconds` to a number of seconds (e.g. `3600`). To hide the timer, set `display.showCacheTimer` to `false`.
 
 **Requirements:**
 - Claude Pro, Max, or Team subscription (not available for API users)

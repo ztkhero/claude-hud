@@ -4,6 +4,10 @@ All notable changes to Claude HUD will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+- Incremental transcript parsing: renders resume from the previous render's byte offset instead of re-reading the whole JSONL, taking a 95MB session's parse from ~174ms to ~1.8ms per render. Falls back to a full parse on truncation, rewound mtime, fingerprint mismatch, or any cache error; disabled below 1MB and via `CLAUDE_HUD_TRANSCRIPT_CACHE=0`.
+- Prompt cache countdown (`⧗ 41m`) in the usage line, timed from when the last API request was sent. The 5-minute vs 1-hour cache window is detected from the transcript's `cache_creation` tiers. Configurable via `display.showCacheTimer` and `display.promptCacheTtlSeconds` (`auto` by default).
+
 ## [0.0.10] - 2026-03-14
 
 ### Added

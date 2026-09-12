@@ -60,6 +60,8 @@ export interface HudConfig {
     showUsage: boolean;
     showModelUsage: boolean;
     showSpend: boolean;
+    showCacheTimer: boolean;
+    promptCacheTtlSeconds: number | 'auto';
     usageBarEnabled: boolean;
     showTools: boolean;
     showAgents: boolean;
@@ -100,6 +102,8 @@ export const DEFAULT_CONFIG: HudConfig = {
     showUsage: true,
     showModelUsage: true,
     showSpend: true,
+    showCacheTimer: true,
+    promptCacheTtlSeconds: 'auto',
     usageBarEnabled: true,
     showTools: false,
     showAgents: false,
@@ -214,6 +218,13 @@ function validateThreshold(value: unknown, max = 100): number {
   return Math.max(0, Math.min(max, value));
 }
 
+/** `'auto'` detects the TTL from the transcript; a positive integer pins it */
+function validatePromptCacheTtl(value: unknown): number | 'auto' {
+  if (value === 'auto') return 'auto';
+  if (typeof value === 'number' && Number.isInteger(value) && value > 0) return value;
+  return DEFAULT_CONFIG.display.promptCacheTtlSeconds;
+}
+
 function validatePositiveInt(value: unknown, defaultValue: number): number {
   if (typeof value !== 'number' || !Number.isInteger(value) || value <= 0) return defaultValue;
   return value;
@@ -285,6 +296,10 @@ export function mergeConfig(userConfig: Partial<HudConfig>): HudConfig {
     showSpend: typeof migrated.display?.showSpend === 'boolean'
       ? migrated.display.showSpend
       : DEFAULT_CONFIG.display.showSpend,
+    showCacheTimer: typeof migrated.display?.showCacheTimer === 'boolean'
+      ? migrated.display.showCacheTimer
+      : DEFAULT_CONFIG.display.showCacheTimer,
+    promptCacheTtlSeconds: validatePromptCacheTtl(migrated.display?.promptCacheTtlSeconds),
     usageBarEnabled: typeof migrated.display?.usageBarEnabled === 'boolean'
       ? migrated.display.usageBarEnabled
       : DEFAULT_CONFIG.display.usageBarEnabled,

@@ -6,7 +6,7 @@ import { renderProjectLine } from '../dist/render/lines/project.js';
 import { renderToolsLine } from '../dist/render/tools-line.js';
 import { renderAgentsLine } from '../dist/render/agents-line.js';
 import { renderTodosLine } from '../dist/render/todos-line.js';
-import { renderUsageLine } from '../dist/render/lines/usage.js';
+import { renderUsageLine, formatCacheTimerPart, resolvePromptCacheTtlSeconds } from '../dist/render/lines/usage.js';
 import { getContextColor, getQuotaColor } from '../dist/render/colors.js';
 
 function stripAnsi(str) {
@@ -1336,4 +1336,105 @@ test('render compact layout keeps activity lines even when elementOrder omits th
 
   assert.ok(output.includes('Read'), 'compact mode should keep tools visible');
   assert.ok(output.includes('todo-marker'), 'compact mode should keep todos visible');
+});
+
+test('formatCacheTimerPart counts down from when the request was sent', () => {
+  const now = Date.UTC(2024, 0, 1, 0, 5, 0);
+  const sentAt = new Date(now - 28_000); // 28s into the window, 4:32 left
+  // Rounded down to the minute: an "at least" promise, not stale seconds
+  assert.equal(stripAnsi(formatCacheTimerPart(sentAt, 300, undefined, now)), '⧗ 4m');
+});
+
+test('formatCacheTimerPart renders hours for a 1-hour window', () => {
+  const now = Date.UTC(2024, 0, 1, 0, 5, 0);
+  assert.equal(stripAnsi(formatCacheTimerPart(new Date(now), 3600, undefined, now)), '⧗ 1h');
+  assert.equal(stripAnsi(formatCacheTimerPart(new Date(now - 60_000), 3600, undefined, now)), '⧗ 59m');
+  assert.equal(
+    stripAnsi(formatCacheTimerPart(new Date(now - 1_140_000), 3600, undefined, now)),
+    '⧗ 41m'
+  );
+});
+
+test('formatCacheTimerPart shows <1m in the final minute', () => {
+  const now = Date.UTC(2024, 0, 1, 0, 5, 0);
+  assert.equal(
+    stripAnsi(formatCacheTimerPart(new Date(now - 295_000), 300, undefined, now)),
+    '⧗ <1m'
+  );
+});
+
+test('formatCacheTimerPart reports an expired window', () => {
+  const now = Date.UTC(2024, 0, 1, 0, 5, 0);
+  assert.equal(stripAnsi(formatCacheTimerPart(new Date(now - 300_000), 300, undefined, now)), '⧗ --');
+  assert.equal(stripAnsi(formatCacheTimerPart(new Date(now - 900_000), 300, undefined, now)), '⧗ --');
+});
+
+test('formatCacheTimerPart returns null without a known request time', () => {
+  assert.equal(formatCacheTimerPart(undefined, 300, undefined, Date.now()), null);
+});
+
+test('renderUsageLine places the cache timer between model usage and spend', () => {
+  const ctx = baseContext();
+  ctx.config.display.usageBarEnabled = false;
+  // 90s into a 300s window: 3:30 left, safely mid-bucket so flooring is stable
+  ctx.transcript.lastRequestAt = new Date(Date.now() - 90_000);
+  ctx.usageData = {
+    planName: 'Max',
+    fiveHour: 12,
+    sevenDay: 17,
+    fiveHourResetAt: null,
+    sevenDayResetAt: null,
+    modelLimits: [{ model: 'Fable', utilization: 94, resetAt: null }],
+    spend: { usedMinor: 0, limitMinor: null, currency: 'USD', exponent: 2, percent: 0 },
+  };
+
+  const line = stripAnsi(renderUsageLine(ctx));
+  assert.ok(/Fable: 94% \| ⧗ 3m \| \$0\.00/.test(line), `unexpected order: ${line}`);
+});
+
+test('renderUsageLine hides the cache timer when showCacheTimer is false', () => {
+  const ctx = baseContext();
+  ctx.config.display.usageBarEnabled = false;
+  ctx.config.display.showCacheTimer = false;
+  ctx.transcript.lastRequestAt = new Date(Date.now() - 60_000);
+  ctx.usageData = {
+    planName: 'Max',
+    fiveHour: 12,
+    sevenDay: 17,
+    fiveHourResetAt: null,
+    sevenDayResetAt: null,
+  };
+
+  const line = stripAnsi(renderUsageLine(ctx));
+  assert.ok(!line.includes('⧗'), `should not include cache timer: ${line}`);
+});
+
+test('resolvePromptCacheTtlSeconds follows detection in auto mode', () => {
+  assert.equal(resolvePromptCacheTtlSeconds('auto', 3600), 3600);
+  assert.equal(resolvePromptCacheTtlSeconds('auto', 300), 300);
+  assert.equal(resolvePromptCacheTtlSeconds('auto', undefined), 300);
+  assert.equal(resolvePromptCacheTtlSeconds(undefined, 3600), 3600);
+});
+
+test('resolvePromptCacheTtlSeconds lets an explicit TTL override detection', () => {
+  assert.equal(resolvePromptCacheTtlSeconds(300, 3600), 300);
+  assert.equal(resolvePromptCacheTtlSeconds(900, undefined), 900);
+});
+
+test('renderUsageLine uses the detected 1-hour cache window', () => {
+  const ctx = baseContext();
+  ctx.config.display.usageBarEnabled = false;
+  ctx.config.display.promptCacheTtlSeconds = 'auto';
+  ctx.transcript.lastRequestAt = new Date(Date.now() - 90_000);
+  ctx.transcript.cacheTtlSeconds = 3600;
+  ctx.usageData = {
+    planName: 'Max',
+    fiveHour: 12,
+    sevenDay: 17,
+    fiveHourResetAt: null,
+    sevenDayResetAt: null,
+  };
+
+  const line = stripAnsi(renderUsageLine(ctx));
+  assert.ok(/⧗ 58m/.test(line), `expected a 1-hour countdown: ${line}`);
 });

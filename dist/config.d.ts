@@ -34,6 +34,8 @@ export interface HudConfig {
         showUsage: boolean;
         showModelUsage: boolean;
         showSpend: boolean;
+        showCacheTimer: boolean;
+        promptCacheTtlSeconds: number | 'auto';
         usageBarEnabled: boolean;
         showTools: boolean;
         showAgents: boolean;

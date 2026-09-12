@@ -25,7 +25,7 @@ Claude Code → stdin JSON → parse → render lines → stdout → Claude Code
            ↘ transcript_path → parse JSONL → tools/agents/todos
 ```
 
-**Key insight**: The statusline is invoked every ~300ms by Claude Code. Each invocation:
+**Key insight**: Claude Code re-runs the statusline as a fresh process. Renders are event-driven (`tokenUsage`, `permissionMode`, `mainLoopModel`, … changing) plus, if `statusLine.refreshInterval` is set in `settings.json`, every N seconds — there is no periodic refresh by default. Each invocation:
 1. Receives JSON via stdin (model, context, tokens - native accurate data)
 2. Parses the transcript JSONL file for tools, agents, and todos
 3. Renders multi-line output to stdout
@@ -65,7 +65,8 @@ Claude Code → stdin JSON → parse → render lines → stdout → Claude Code
 src/
 ├── index.ts           # Entry point
 ├── stdin.ts           # Parse Claude's JSON input
-├── transcript.ts      # Parse transcript JSONL
+├── transcript.ts      # Parse transcript JSONL (incremental, resumes from cached offset)
+├── transcript-cache.ts # On-disk parse cache + append/rewrite guards
 ├── config-reader.ts   # Read MCP/rules configs
 ├── config.ts          # Load/validate user config
 ├── git.ts             # Git status (branch, dirty, ahead/behind)

@@ -35,6 +35,8 @@ export const DEFAULT_CONFIG = {
         showUsage: true,
         showModelUsage: true,
         showSpend: true,
+        showCacheTimer: true,
+        promptCacheTtlSeconds: 'auto',
         usageBarEnabled: true,
         showTools: false,
         showAgents: false,
@@ -134,6 +136,14 @@ function validateThreshold(value, max = 100) {
         return 0;
     return Math.max(0, Math.min(max, value));
 }
+/** `'auto'` detects the TTL from the transcript; a positive integer pins it */
+function validatePromptCacheTtl(value) {
+    if (value === 'auto')
+        return 'auto';
+    if (typeof value === 'number' && Number.isInteger(value) && value > 0)
+        return value;
+    return DEFAULT_CONFIG.display.promptCacheTtlSeconds;
+}
 function validatePositiveInt(value, defaultValue) {
     if (typeof value !== 'number' || !Number.isInteger(value) || value <= 0)
         return defaultValue;
@@ -199,6 +209,10 @@ export function mergeConfig(userConfig) {
         showSpend: typeof migrated.display?.showSpend === 'boolean'
             ? migrated.display.showSpend
             : DEFAULT_CONFIG.display.showSpend,
+        showCacheTimer: typeof migrated.display?.showCacheTimer === 'boolean'
+            ? migrated.display.showCacheTimer
+            : DEFAULT_CONFIG.display.showCacheTimer,
+        promptCacheTtlSeconds: validatePromptCacheTtl(migrated.display?.promptCacheTtlSeconds),
         usageBarEnabled: typeof migrated.display?.usageBarEnabled === 'boolean'
             ? migrated.display.usageBarEnabled
             : DEFAULT_CONFIG.display.usageBarEnabled,

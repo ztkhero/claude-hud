@@ -1,7 +1,7 @@
 import { isLimitReached } from '../types.js';
 import { getContextPercent, getBufferedPercent, getModelName, getProviderLabel, getTotalTokens } from '../stdin.js';
 import { getOutputSpeed } from '../speed-tracker.js';
-import { formatSpendPart } from './lines/usage.js';
+import { formatCacheTimerPart, formatSpendPart, resolvePromptCacheTtlSeconds } from './lines/usage.js';
 import { coloredBar, critical, cyan, dim, magenta, red, warning, yellow, getContextColor, getQuotaColor, quotaBar, RESET } from './colors.js';
 const DEBUG = process.env.DEBUG?.includes('claude-hud') || process.env.DEBUG === '*';
 /**
@@ -129,6 +129,10 @@ export function renderSessionLine(ctx) {
         const spendPart = display?.showSpend !== false && ctx.usageData.spend
             ? formatSpendPart(ctx.usageData.spend, colors)
             : null;
+        const cachePart = display?.showCacheTimer !== false
+            ? formatCacheTimerPart(ctx.transcript?.lastRequestAt, resolvePromptCacheTtlSeconds(display?.promptCacheTtlSeconds, ctx.transcript?.cacheTtlSeconds), colors)
+            : null;
+        const tailParts = [cachePart, spendPart].filter((part) => part !== null);
         if (ctx.usageData.apiUnavailable) {
             const errorHint = formatUsageError(ctx.usageData.apiError);
             parts.push(warning(`usage: ⚠${errorHint}`, colors));
@@ -138,9 +142,7 @@ export function renderSessionLine(ctx) {
                 ? formatResetTime(ctx.usageData.fiveHourResetAt)
                 : formatResetTime(ctx.usageData.sevenDayResetAt);
             parts.push(critical(`⚠ Limit reached${resetTime ? ` (resets ${resetTime})` : ''}`, colors));
-            if (spendPart) {
-                parts.push(spendPart);
-            }
+            parts.push(...tailParts);
         }
         else {
             const usageThreshold = display?.usageThreshold ?? 0;
@@ -186,9 +188,7 @@ export function renderSessionLine(ctx) {
                         ? `${limit.model} ${quotaBar(limit.utilization ?? 0, 5, colors)} ${percentDisplay}`
                         : `${limit.model}: ${percentDisplay}`);
                 }
-                if (spendPart) {
-                    usageParts.push(spendPart);
-                }
+                usageParts.push(...tailParts);
                 parts.push(`${usageParts.join(' | ')}${syncingSuffix}`);
             }
         }

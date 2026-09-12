@@ -91,6 +91,10 @@ export interface TranscriptData {
   todos: TodoItem[];
   sessionStart?: Date;
   sessionName?: string;
+  /** When the most recent API request for this conversation was sent (prompt-cache anchor) */
+  lastRequestAt?: Date;
+  /** Prompt cache lifetime (seconds) detected from the transcript's `cache_creation` tiers */
+  cacheTtlSeconds?: number;
 }
 
 export interface RenderContext {

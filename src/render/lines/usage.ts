@@ -1,7 +1,8 @@
 import type { ModelUsageLimit, RenderContext, SpendData } from '../../types.js';
 import { isLimitReached } from '../../types.js';
 import { getProviderLabel } from '../../stdin.js';
-import { critical, warning, dim, getQuotaColor, quotaBar, RESET } from '../colors.js';
+import { DEFAULT_PROMPT_CACHE_TTL_SECONDS } from '../../constants.js';
+import { critical, warning, dim, cyan, getQuotaColor, quotaBar, RESET } from '../colors.js';
 
 export function renderUsageLine(ctx: RenderContext): string | null {
   const display = ctx.config?.display;
@@ -27,13 +28,21 @@ export function renderUsageLine(ctx: RenderContext): string | null {
   const spendPart = display?.showSpend !== false && ctx.usageData.spend
     ? formatSpendPart(ctx.usageData.spend, colors)
     : null;
+  const cachePart = display?.showCacheTimer !== false
+    ? formatCacheTimerPart(
+        ctx.transcript?.lastRequestAt,
+        resolvePromptCacheTtlSeconds(display?.promptCacheTtlSeconds, ctx.transcript?.cacheTtlSeconds),
+        colors
+      )
+    : null;
+  const tailParts = [cachePart, spendPart].filter((part): part is string => part !== null);
 
   if (isLimitReached(ctx.usageData)) {
     const resetTime = ctx.usageData.fiveHour === 100
       ? formatResetTime(ctx.usageData.fiveHourResetAt)
       : formatResetTime(ctx.usageData.sevenDayResetAt);
     const limitLine = `${critical(`⚠ Limit reached${resetTime ? ` (resets ${resetTime})` : ''}`, colors)}`;
-    return spendPart ? `${limitLine} | ${spendPart}` : limitLine;
+    return [limitLine, ...tailParts].join(' | ');
   }
 
   const threshold = display?.usageThreshold ?? 0;
@@ -83,9 +92,7 @@ export function renderUsageLine(ctx: RenderContext): string | null {
     parts.push(formatModelLimitPart(limit, usageBarEnabled, colors));
   }
 
-  if (spendPart) {
-    parts.push(spendPart);
-  }
+  parts.push(...tailParts);
 
   return `${parts.join(' | ')}${syncingSuffix}`;
 }
@@ -121,6 +128,70 @@ function formatMoney(amountMinor: number, currency: string, exponent: number): s
   } catch {
     return `$${amount.toFixed(exponent)}`;
   }
+}
+
+/**
+ * Resolve which prompt cache TTL the countdown should use.
+ *
+ * `'auto'` (the default) follows the lifetime detected from the transcript's
+ * `cache_creation` tiers, falling back to Anthropic's 5-minute default until a
+ * cache write has been observed. An explicit number pins the window instead.
+ */
+export function resolvePromptCacheTtlSeconds(
+  configured: number | 'auto' | undefined,
+  detected: number | undefined
+): number {
+  if (typeof configured === 'number' && configured > 0) {
+    return configured;
+  }
+  return detected ?? DEFAULT_PROMPT_CACHE_TTL_SECONDS;
+}
+
+/**
+ * Format the prompt-cache countdown as `⧗ 4m`.
+ *
+ * The window starts when the last API request was *sent* (the transcript's last
+ * `user` entry), because that is when the request's cache blocks are written and
+ * when an existing cache hit refreshes its TTL. Returns `⧗ --` once it lapses.
+ *
+ * Minute granularity, rounded down: the statusline only re-renders on activity
+ * plus the configured `statusLine.refreshInterval`, so a seconds display would
+ * be stale precision. Rounding down keeps the number an "at least" promise.
+ */
+export function formatCacheTimerPart(
+  lastRequestAt: Date | undefined,
+  ttlSeconds: number,
+  colors?: RenderContext['config']['colors'],
+  now: number = Date.now()
+): string | null {
+  if (!lastRequestAt) return null;
+
+  const sentAt = lastRequestAt.getTime();
+  if (!Number.isFinite(sentAt)) return null;
+
+  const ttlMs = Math.max(0, ttlSeconds) * 1000;
+  const remainingMs = sentAt + ttlMs - now;
+  if (remainingMs <= 0) {
+    return dim('⧗ --');
+  }
+
+  const label = formatRemainingWindow(remainingMs);
+
+  // Last quarter of the window: the next request is about to pay a full cache write
+  return remainingMs <= ttlMs / 4
+    ? `${dim('⧗')} ${warning(label, colors)}`
+    : `${dim('⧗')} ${cyan(label)}`;
+}
+
+/** Remaining cache window as `<1m`, `12m`, `1h`, or `1h 12m` (rounded down) */
+function formatRemainingWindow(ms: number): string {
+  const mins = Math.floor(ms / 60000);
+  if (mins < 1) return '<1m';
+  if (mins < 60) return `${mins}m`;
+
+  const hours = Math.floor(mins / 60);
+  const remMins = mins % 60;
+  return remMins > 0 ? `${hours}h ${remMins}m` : `${hours}h`;
 }
 
 function formatModelLimitPart(
